@@ -1,3 +1,7 @@
+ <img src="https://github.com/user-attachments/assets/352003c1-ec7a-41ec-aa07-a1405c9ace1b"
+       alt="Color Hunt logo"
+       style="vertical-align: middle; width:128px;height:128px;">
+
 # Color Hunt
 
 A 2-player multiplayer game developed as part of a university project.
