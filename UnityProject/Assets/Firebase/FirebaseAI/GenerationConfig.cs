@@ -1,0 +1,408 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Firebase.AI.Internal;
+
+namespace Firebase.AI
+{
+  /// <summary>
+  /// A struct defining model parameters to be used when sending generative AI
+  /// requests to the backend model.
+  /// </summary>
+  public readonly struct GenerationConfig
+  {
+    private readonly float? _temperature;
+    private readonly float? _topP;
+    private readonly float? _topK;
+    private readonly int? _candidateCount;
+    private readonly int? _maxOutputTokens;
+    private readonly float? _presencePenalty;
+    private readonly float? _frequencyPenalty;
+    private readonly string[] _stopSequences;
+    private readonly string _responseMimeType;
+    private readonly Schema _responseSchema;
+    private readonly JsonSchema _responseJsonSchema;
+    private readonly List<ResponseModality> _responseModalities;
+    private readonly ThinkingConfig? _thinkingConfig;
+    private readonly ImageConfig? _imageConfig;
+
+    /// <summary>
+    /// Creates a new `GenerationConfig` value.
+    ///
+    /// See the
+    /// [Configure model parameters](https://firebase.google.com/docs/vertex-ai/model-parameters)
+    /// guide and the
+    /// [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// for more details.
+    /// </summary>
+    /// 
+    /// <param name="temperature">Controls the randomness of the language model's output. Higher values (for
+    /// example, 1.0) make the text more random and creative, while lower values (for example,
+    /// 0.1) make it more focused and deterministic.
+    ///
+    /// > Note: A temperature of 0 means that the highest probability tokens are always selected.
+    /// > In this case, responses for a given prompt are mostly deterministic, but a small amount
+    /// > of variation is still possible.
+    ///
+    /// > Important: The range of supported temperature values depends on the model; see the
+    /// > [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// > for more details.</param>
+    /// 
+    /// <param name="topP">Controls diversity of generated text. Higher values (e.g., 0.9) produce more diverse
+    /// text, while lower values (e.g., 0.5) make the output more focused.
+    ///
+    /// The supported range is 0.0 to 1.0.
+    ///
+    /// > Important: The default `topP` value depends on the model; see the
+    /// [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// for more details.</param>
+    /// 
+    /// <param name="topK">Limits the number of highest probability words the model considers when generating
+    /// text. For example, a topK of 40 means only the 40 most likely words are considered for the
+    /// next token. A higher value increases diversity, while a lower value makes the output more
+    /// deterministic.
+    ///
+    /// The supported range is 1 to 40.
+    ///
+    /// > Important: Support for `topK` and the default value depends on the model; see the
+    /// [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// for more details.</param>
+    /// 
+    /// <param name="candidateCount">The number of response variations to return; defaults to 1 if not set.
+    /// Support for multiple candidates depends on the model; see the
+    /// [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// for more details.</param>
+    /// 
+    /// <param name="maxOutputTokens">Maximum number of tokens that can be generated in the response.
+    /// See the configure model parameters [documentation](https://firebase.google.com/docs/vertex-ai/model-parameters?platform=ios#max-output-tokens)
+    /// for more details.</param>
+    /// 
+    /// <param name="presencePenalty">Controls the likelihood of repeating the same words or phrases already
+    /// generated in the text. Higher values increase the penalty of repetition, resulting in more
+    /// diverse output.
+    ///
+    /// > Note: While both `presencePenalty` and `frequencyPenalty` discourage repetition,
+    /// > `presencePenalty` applies the same penalty regardless of how many times the word/phrase
+    /// > has already appeared, whereas `frequencyPenalty` increases the penalty for *each*
+    /// > repetition of a word/phrase.
+    ///
+    /// > Important: The range of supported `presencePenalty` values depends on the model; see the
+    /// > [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// > for more details.</param>
+    /// 
+    /// <param name="frequencyPenalty">Controls the likelihood of repeating words or phrases, with the penalty
+    /// increasing for each repetition. Higher values increase the penalty of repetition,
+    /// resulting in more diverse output.
+    ///
+    /// > Note: While both `frequencyPenalty` and `presencePenalty` discourage repetition,
+    /// > `frequencyPenalty` increases the penalty for *each* repetition of a word/phrase, whereas
+    /// > `presencePenalty` applies the same penalty regardless of how many times the word/phrase
+    /// > has already appeared.
+    ///
+    /// > Important: The range of supported `frequencyPenalty` values depends on the model; see
+    /// > the
+    /// > [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// > for more details.</param>
+    /// 
+    /// <param name="stopSequences">A set of up to 5 `String`s that will stop output generation. If specified,
+    /// the API will stop at the first appearance of a stop sequence. The stop sequence will not
+    /// be included as part of the response. See the
+    /// [Cloud documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#generationconfig)
+    /// for more details.</param>
+    /// 
+    /// <param name="responseMimeType">Output response MIME type of the generated candidate text.
+    ///
+    /// Supported MIME types:
+    /// - `text/plain`: Text output; the default behavior if unspecified.
+    /// - `application/json`: JSON response in the candidates.
+    /// - `text/x.enum`: For classification tasks, output an enum value as defined in the
+    /// `responseSchema`.</param>
+    /// 
+    /// <param name="responseSchema">Output schema of the generated candidate text. If set, a compatible
+    /// `responseMimeType` must also be set. Note that if this is set, responseJsonSchema should be left null.
+    ///
+    /// Compatible MIME types:
+    /// - `application/json`: Schema for JSON response.
+    ///
+    /// Refer to the
+    /// [Control generated output](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output)
+    /// guide for more details.</param>
+    /// 
+    /// <param name="responseJsonSchema">Output JSON schema of the generated candidate text. If set, a compatible
+    /// `responseMimeType` must also be set. Note that if this is set, responseSchema should be left null.
+    ///
+    /// Compatible MIME types:
+    /// - `application/json`: JsonSchema for JSON response.
+    ///
+    /// Refer to the
+    /// [Control generated output](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output)
+    /// guide for more details.</param>
+    /// 
+    /// <param name="responseModalities">
+    /// The data types (modalities) that may be returned in model responses.
+    ///
+    /// See the [multimodal
+    /// responses](https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal-response-generation)
+    /// documentation for more details.
+    /// </param>
+    /// 
+    /// <param name="thinkingConfig">
+    /// Configuration for controlling the "thinking" behavior of compatible Gemini
+    /// models; see `ThinkingConfig` for more details.
+    ///
+    /// An error will be returned if this field is set for models that don't
+    /// support thinking.
+    /// </param>
+    /// <param name="imageConfig">
+    /// Configuration for the aspect ratio and size of generated images.
+    /// </param>
+    public GenerationConfig(
+        float? temperature = null,
+        float? topP = null,
+        float? topK = null,
+        int? candidateCount = null,
+        int? maxOutputTokens = null,
+        float? presencePenalty = null,
+        float? frequencyPenalty = null,
+        string[] stopSequences = null,
+        string responseMimeType = null,
+        Schema responseSchema = null,
+        JsonSchema responseJsonSchema = null,
+        IEnumerable<ResponseModality> responseModalities = null,
+        ThinkingConfig? thinkingConfig = null,
+        ImageConfig? imageConfig = null)
+    {
+      _temperature = temperature;
+      _topP = topP;
+      _topK = topK;
+      _candidateCount = candidateCount;
+      _maxOutputTokens = maxOutputTokens;
+      _presencePenalty = presencePenalty;
+      _frequencyPenalty = frequencyPenalty;
+      _stopSequences = stopSequences;
+      _responseMimeType = responseMimeType;
+      _responseSchema = responseSchema;
+      _responseJsonSchema = responseJsonSchema;
+      _responseModalities = responseModalities != null ?
+          new List<ResponseModality>(responseModalities) : null;
+      _thinkingConfig = thinkingConfig;
+      _imageConfig = imageConfig;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for serializing the object to JSON for the API request.
+    /// </summary>
+    internal Dictionary<string, object> ToJson()
+    {
+      Dictionary<string, object> jsonDict = new();
+      if (_temperature.HasValue) jsonDict["temperature"] = _temperature.Value;
+      if (_topP.HasValue) jsonDict["topP"] = _topP.Value;
+      if (_topK.HasValue) jsonDict["topK"] = _topK.Value;
+      if (_candidateCount.HasValue) jsonDict["candidateCount"] = _candidateCount.Value;
+      if (_maxOutputTokens.HasValue) jsonDict["maxOutputTokens"] = _maxOutputTokens.Value;
+      if (_presencePenalty.HasValue) jsonDict["presencePenalty"] = _presencePenalty.Value;
+      if (_frequencyPenalty.HasValue) jsonDict["frequencyPenalty"] = _frequencyPenalty.Value;
+      if (_stopSequences != null && _stopSequences.Length > 0) jsonDict["stopSequences"] = _stopSequences;
+      if (!string.IsNullOrWhiteSpace(_responseMimeType)) jsonDict["responseMimeType"] = _responseMimeType;
+      if (_responseSchema != null) jsonDict["responseSchema"] = _responseSchema.ToJson();
+      if (_responseJsonSchema != null) jsonDict["responseJsonSchema"] = _responseJsonSchema.ToJson();
+      if (_responseModalities != null && _responseModalities.Count > 0)
+      {
+        jsonDict["responseModalities"] =
+            _responseModalities.Select(EnumConverters.ResponseModalityToString).ToList();
+      }
+      if (_thinkingConfig != null) jsonDict["thinkingConfig"] = _thinkingConfig.Value.ToJson();
+      if (_imageConfig != null) jsonDict["imageConfig"] = _imageConfig.Value.ToJson();
+
+      return jsonDict;
+    }
+  }
+
+  /// <summary>
+  /// Configuration options for Thinking features.
+  /// </summary>
+  public readonly struct ThinkingConfig
+  {
+    /// <summary>
+    /// A preset that balances the trade-off between reasoning quality and response speed 
+    /// for a model's "thinking" process. Note, not all models support every level.
+    /// </summary>
+    public enum ThinkingLevel
+    {
+      /// <summary>
+      /// Matches the "no thinking" setting for most queries.
+      /// </summary>
+      Minimal,
+      /// <summary>
+      /// Minimizes latency and cost.
+      /// </summary>
+      Low,
+      /// <summary>
+      /// Balanced thinking for most tasks.
+      /// </summary>
+      Medium,
+      /// <summary>
+      /// Maximizes reasoning depth.
+      /// </summary>
+      High
+    }
+
+#if !DOXYGEN
+    public readonly ThinkingLevel? Level { get; }
+    public readonly int? ThinkingBudget { get; }
+    public readonly bool? IncludeThoughts { get; }
+#endif
+
+    /// <summary>
+    /// Initializes configuration options for Thinking features.
+    /// 
+    /// Used for Gemini models 2.5 and earlier.
+    /// </summary>
+    /// <param name="thinkingBudget">The token budget for the model's thinking process.</param>
+    /// <param name="includeThoughts">
+    /// If true, summaries of the model's "thoughts" are included in responses.
+    /// </param>
+    public ThinkingConfig(int? thinkingBudget = null, bool? includeThoughts = null)
+    {
+      Level = null;
+      ThinkingBudget = thinkingBudget;
+      IncludeThoughts = includeThoughts;
+    }
+
+    /// <summary>
+    /// Initializes configuration options for Thinking features with a given ThinkingLevel.
+    /// 
+    /// Used for Gemini models 3.0 and newer. See https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
+    /// </summary>
+    /// <param name="thinkingLevel">Defines the model's thinking process.</param>
+    /// <param name="includeThoughts">
+    /// If true, summaries of the model's "thoughts" are included in responses.
+    /// </param>
+    public ThinkingConfig(ThinkingLevel thinkingLevel, bool? includeThoughts = null)
+    {
+      Level = thinkingLevel;
+      ThinkingBudget = null;
+      IncludeThoughts = includeThoughts;
+    }
+
+    private string ConvertThinkingLevel()
+    {
+      return Level switch
+      {
+        ThinkingLevel.Minimal => "MINIMAL",
+        ThinkingLevel.Low => "LOW",
+        ThinkingLevel.Medium => "MEDIUM",
+        ThinkingLevel.High => "HIGH",
+        _ => Level.ToString()
+      };
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for serializing the object to JSON for the API request.
+    /// </summary>
+    internal Dictionary<string, object> ToJson()
+    {
+      Dictionary<string, object> jsonDict = new();
+      if (Level.HasValue) jsonDict.Add("thinkingLevel", ConvertThinkingLevel());
+      jsonDict.AddIfHasValue("thinkingBudget", ThinkingBudget);
+      jsonDict.AddIfHasValue("includeThoughts", IncludeThoughts);
+      return jsonDict;
+    }
+  }
+
+  /// <summary>
+  /// Configuration options for generating images with Gemini models.
+  /// </summary>
+  public readonly struct ImageConfig
+  {
+    /// <summary>
+    /// The aspect ratio of generated images.
+    /// </summary>
+    public readonly struct AspectRatio
+    {
+      public string Value { get; }
+
+      /// <summary>
+      /// Constructs a custom AspectRatio, instead of one of the presets.
+      /// Note that the backend model needs to support the requested ratio.
+      /// </summary>
+      public AspectRatio(string value) { Value = value; }
+
+      public static readonly AspectRatio Square1x1 = new("1:1");
+      public static readonly AspectRatio Portrait9x16 = new("9:16");
+      public static readonly AspectRatio Landscape16x9 = new("16:9");
+      public static readonly AspectRatio Portrait3x4 = new("3:4");
+      public static readonly AspectRatio Landscape4x3 = new("4:3");
+      public static readonly AspectRatio Portrait2x3 = new("2:3");
+      public static readonly AspectRatio Landscape3x2 = new("3:2");
+      public static readonly AspectRatio Portrait4x5 = new("4:5");
+      public static readonly AspectRatio Landscape5x4 = new("5:4");
+      public static readonly AspectRatio Portrait1x4 = new("1:4");
+      public static readonly AspectRatio Landscape4x1 = new("4:1");
+      public static readonly AspectRatio Portrait1x8 = new("1:8");
+      public static readonly AspectRatio Landscape8x1 = new("8:1");
+      public static readonly AspectRatio Ultrawide21x9 = new("21:9");
+
+      public override string ToString() => Value;
+    }
+
+    /// <summary>
+    /// The size of images to generate.
+    /// </summary>
+    public readonly struct ImageSize
+    {
+      public string Value { get; }
+
+      /// <summary>
+      /// Constructs a custom ImageSize, instead of one of the presets.
+      /// Note that the backend model needs to support the requested size.
+      /// </summary>
+      public ImageSize(string value) { Value = value; }
+
+      public static readonly ImageSize Size512 = new("512");
+      public static readonly ImageSize Size1K = new("1K");
+      public static readonly ImageSize Size2K = new("2K");
+      public static readonly ImageSize Size4K = new("4K");
+
+      public override string ToString() => Value;
+    }
+
+    public AspectRatio? Ratio { get; }
+    public ImageSize? Size { get; }
+
+    /// <summary>
+    /// Creates a new `ImageConfig` with the given settings.
+    /// </summary>
+    public ImageConfig(AspectRatio? aspectRatio = null, ImageSize? imageSize = null)
+    {
+      Ratio = aspectRatio;
+      Size = imageSize;
+    }
+
+    internal Dictionary<string, object> ToJson()
+    {
+      Dictionary<string, object> jsonDict = new();
+      if (Ratio?.Value is string aspectRatio) jsonDict["aspectRatio"] = aspectRatio;
+      if (Size?.Value is string imageSize) jsonDict["imageSize"] = imageSize;
+      return jsonDict;
+    }
+  }
+}

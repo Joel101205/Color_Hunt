@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 5ae332fceb7984650ae1e4f83f06457f
+labels:
+- gvh
+- gvh_version-13.11.0
+- gvhp_exportpath-Firebase/FirebaseAI/JsonSchema.cs
+timeCreated: 1480838400
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon:
+    instanceID: 0
+  userData:
+  assetBundleName:
+  assetBundleVariant:

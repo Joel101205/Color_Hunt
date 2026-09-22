@@ -1,0 +1,421 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System.Collections.Generic;
+using Google.MiniJSON;
+using Firebase.AI.Internal;
+using System.Linq;
+using System;
+using System.Text;
+
+namespace Firebase.AI
+{
+  /// <summary>
+  /// Represents the response from the model for live content updates.
+  /// </summary>
+  public readonly struct LiveSessionResponse
+  {
+
+    /// <summary>
+    /// The detailed message from the live session.
+    /// </summary>
+    public readonly ILiveSessionMessage Message { get; }
+
+    /// <summary>
+    /// The response's content as text, if it exists.
+    /// </summary>
+    public string Text
+    {
+      get
+      {
+        StringBuilder stringBuilder = new();
+        if (Message is LiveSessionContent content && content.Content != null)
+        {
+          foreach (var part in content.Content?.Parts)
+          {
+            if (part is ModelContent.TextPart textPart)
+            {
+              stringBuilder.Append(textPart.Text);
+            }
+          }
+        }
+        return stringBuilder.ToString();
+      }
+    }
+
+    /// <summary>
+    /// The response's content that was audio, if it exists.
+    /// </summary>
+    public IReadOnlyList<byte[]> Audio
+    {
+      get
+      {
+        if (Message is LiveSessionContent content)
+        {
+          return content.Content?.Parts
+              .OfType<ModelContent.InlineDataPart>()
+              .Where(part => part.MimeType.StartsWith("audio/pcm"))
+              .Select(part => part.Data.ToArray())
+              .ToList();
+        }
+        return null;
+      }
+    }
+
+    /// <summary>
+    /// The response's content that was audio, if it exists, converted into floats.
+    /// </summary>
+    public IReadOnlyList<float[]> AudioAsFloat
+    {
+      get
+      {
+        return Audio?.Select(ConvertBytesToFloat).ToArray();
+      }
+    }
+
+    // Helper function to convert a byte array representing a 16-bit encoded
+    // Audio snippit into a float array, which Unity's built in libraries supports.
+    private float[] ConvertBytesToFloat(byte[] byteArray)
+    {
+      // Assumes 16 bit encoding, which would be two bytes per sample.
+      int sampleCount = byteArray.Length / 2;
+      float[] floatArray = new float[sampleCount];
+
+      for (int i = 0; i < sampleCount; i++)
+      {
+        float sample = (short)(byteArray[i * 2] | (byteArray[i * 2 + 1] << 8)) / 32768f;
+        floatArray[i] = Math.Clamp(sample, -1f, 1f); // Ensure values are within the valid range
+      }
+
+      return floatArray;
+    }
+
+    private LiveSessionResponse(ILiveSessionMessage liveSessionMessage)
+    {
+      Message = liveSessionMessage;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionResponse? FromJson(string jsonString)
+    {
+      return FromJson(Json.Deserialize(jsonString) as Dictionary<string, object>);
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionResponse? FromJson(Dictionary<string, object> jsonDict)
+    {
+      if (jsonDict.ContainsKey("setupComplete"))
+      {
+        // We don't want to pass this along to the user, so return null instead.
+        return null;
+      }
+      else if (jsonDict.TryParseValue("serverContent", out Dictionary<string, object> serverContent))
+      {
+        // TODO: Other fields
+        return new LiveSessionResponse(LiveSessionContent.FromJson(serverContent));
+      }
+      else if (jsonDict.TryParseValue("toolCall", out Dictionary<string, object> toolCall))
+      {
+        return new LiveSessionResponse(LiveSessionToolCall.FromJson(toolCall));
+      }
+      else if (jsonDict.TryParseValue("toolCallCancellation", out Dictionary<string, object> toolCallCancellation))
+      {
+        return new LiveSessionResponse(LiveSessionToolCallCancellation.FromJson(toolCallCancellation));
+      }
+      else if (jsonDict.TryParseValue("goAway", out Dictionary<string, object> goAway))
+      {
+        return new LiveSessionResponse(LiveSessionGoingAway.FromJson(goAway));
+      }
+      else if (jsonDict.TryParseValue("sessionResumptionUpdate", out Dictionary<string, object> sessionResumptionUpdate))
+      {
+        return new LiveSessionResponse(LiveSessionResumptionUpdate.FromJson(sessionResumptionUpdate));
+      }
+      else
+      {
+        // TODO: Determine if we want to log this, or just ignore it?
+#if FIREBASE_LOG_REST_CALLS
+        UnityEngine.Debug.Log($"Failed to parse LiveSessionResponse from JSON, with keys: {string.Join(',', jsonDict.Keys)}");
+#endif
+        return null;
+      }
+    }
+  }
+
+  /// <summary>
+  /// Represents a message received from a live session.
+  /// </summary>
+  public interface ILiveSessionMessage { }
+
+  /// <summary>
+  /// Content generated by the model in a live session.
+  /// </summary>
+  public readonly struct LiveSessionContent : ILiveSessionMessage
+  {
+    /// <summary>
+    /// The main content data of the response. This can be `null` if there was no content.
+    /// </summary>
+    public readonly ModelContent? Content { get; }
+
+    /// <summary>
+    /// Whether the turn is complete. If true, indicates that the model is done
+    /// generating.
+    /// </summary>
+    public readonly bool TurnComplete { get; }
+
+    /// <summary>
+    /// Whether generation was interrupted. If true, indicates that a
+    /// client message has interrupted current model.
+    /// </summary>
+    public readonly bool Interrupted { get; }
+
+    /// <summary>
+    /// The input transcription. Note that the transcription is independent to
+    /// the Content, and doesn't imply any ordering between them.
+    /// </summary>
+    public readonly Transcription? InputTranscription { get; }
+
+    /// <summary>
+    /// The output transcription. Note that the transcription is independent to
+    /// the Content, and doesn't imply any ordering between them.
+    /// </summary>
+    public readonly Transcription? OutputTranscription { get; }
+
+    private LiveSessionContent(ModelContent? content, bool turnComplete, bool interrupted,
+        Transcription? input, Transcription? output)
+    {
+      Content = content;
+      TurnComplete = turnComplete;
+      Interrupted = interrupted;
+      InputTranscription = input;
+      OutputTranscription = output;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionContent FromJson(Dictionary<string, object> jsonDict)
+    {
+      return new LiveSessionContent(
+        jsonDict.ParseNullableObject("modelTurn", ModelContent.FromJson),
+        jsonDict.ParseValue<bool>("turnComplete"),
+        jsonDict.ParseValue<bool>("interrupted"),
+        jsonDict.ParseNullableObject("inputTranscription", Transcription.FromJson),
+        jsonDict.ParseNullableObject("outputTranscription", Transcription.FromJson)
+      );
+    }
+  }
+
+  /// <summary>
+  /// A request to use a tool from the live session.
+  /// </summary>
+  public readonly struct LiveSessionToolCall : ILiveSessionMessage
+  {
+    private readonly IReadOnlyList<ModelContent.FunctionCallPart> _functionCalls;
+
+    /// <summary>
+    /// A list of `ModelContent.FunctionCallPart` included in the response, if any.
+    ///
+    /// This will be empty if no function calls are present.
+    /// </summary>
+    public IReadOnlyList<ModelContent.FunctionCallPart> FunctionCalls
+    {
+      get
+      {
+        return _functionCalls ?? new List<ModelContent.FunctionCallPart>();
+      }
+    }
+
+    private LiveSessionToolCall(List<ModelContent.FunctionCallPart> functionCalls)
+    {
+      _functionCalls = functionCalls;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionToolCall FromJson(Dictionary<string, object> jsonDict)
+    {
+      return new LiveSessionToolCall(
+          jsonDict.ParseObjectList("functionCalls",
+            innerDict => ModelContentJsonParsers.FunctionCallPartFromJson(innerDict, null, null)));
+    }
+  }
+
+  /// <summary>
+  /// A request to cancel using a tool from the live session.
+  /// </summary>
+  public readonly struct LiveSessionToolCallCancellation : ILiveSessionMessage
+  {
+    private readonly IReadOnlyList<string> _functionIds;
+
+    /// <summary>
+    /// The list of Function IDs to cancel.
+    /// </summary>
+    public IReadOnlyList<string> FunctionIds
+    {
+      get
+      {
+        return _functionIds ?? new List<string>();
+      }
+    }
+
+    private LiveSessionToolCallCancellation(List<string> functionIds)
+    {
+      _functionIds = functionIds;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionToolCallCancellation FromJson(Dictionary<string, object> jsonDict)
+    {
+      return new LiveSessionToolCallCancellation(
+          jsonDict.ParseStringList("ids"));
+    }
+  }
+
+  /// <summary>
+  /// A server message indicating that the server will not be able to service the
+  /// client soon.
+  /// </summary>
+  public readonly struct LiveSessionGoingAway : ILiveSessionMessage
+  {
+    /// <summary>
+    /// The remaining time before the connection will be terminated as ABORTED.
+    /// </summary>
+    public readonly TimeSpan TimeLeft { get; }
+
+    private LiveSessionGoingAway(TimeSpan timeLeft)
+    {
+      TimeLeft = timeLeft;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionGoingAway FromJson(Dictionary<string, object> jsonDict)
+    {
+      double seconds = 0;
+
+      // The expected format of the Go Away message is:
+      //
+      // "goAway": {
+      //  "timeLeft": "50s"
+      // }
+      //
+      // What is passed to this method should already be the underlying dictionary,
+      // so we just need to parse the timeLeft string.
+      // If for some reason we fail to parse the string, we want to default to 0.
+      try
+      {
+        if (jsonDict.TryParseValue("timeLeft", out string timeLeft))
+        {
+          // Strip off the ending 's'
+          if (timeLeft != null && timeLeft.EndsWith('s'))
+          {
+            seconds = double.Parse(timeLeft.TrimEnd('s'));
+          }
+        }
+      }
+      catch (Exception e)
+      {
+        UnityEngine.Debug.LogError("Failed to properly parse GoingAwayNotice: " + e);
+      }
+
+      return new LiveSessionGoingAway(
+          TimeSpan.FromSeconds(seconds));
+    }
+  }
+
+  /// <summary>
+  /// A transcription of the audio sent in a live session.
+  /// </summary>
+  public readonly struct Transcription
+  {
+    /// <summary>
+    /// The transcribed text.
+    /// </summary>
+    public readonly string Text { get; }
+
+    private Transcription(string text)
+    {
+      Text = text;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static Transcription FromJson(Dictionary<string, object> jsonDict)
+    {
+      return new Transcription(jsonDict.ParseValue<string>("text"));
+    }
+  }
+
+  /// <summary>
+  /// An update of the session resumption state.
+  /// </summary>
+  public readonly struct LiveSessionResumptionUpdate : ILiveSessionMessage
+  {
+    /// <summary>
+    /// The new handle that represents the state that can be resumed. Empty if
+    /// `resumable` is false.
+    /// </summary>
+    public readonly string NewHandle { get; }
+
+    /// <summary>
+    /// Indicates if the session can be resumed at this point.
+    /// </summary>
+    public readonly bool? Resumable { get; }
+
+    /// <summary>
+    /// The index of the last client message that is included in the state
+    /// represented by this update.
+    /// </summary>
+    public readonly int? LastConsumedClientMessageIndex { get; }
+
+    private LiveSessionResumptionUpdate(string newHandle, bool? resumable, int? lastConsumedClientMessageIndex)
+    {
+      NewHandle = newHandle;
+      Resumable = resumable;
+      LastConsumedClientMessageIndex = lastConsumedClientMessageIndex;
+    }
+
+    /// <summary>
+    /// Intended for internal use only.
+    /// This method is used for deserializing JSON responses and should not be called directly.
+    /// </summary>
+    internal static LiveSessionResumptionUpdate FromJson(Dictionary<string, object> jsonDict)
+    {
+      return new LiveSessionResumptionUpdate(
+        jsonDict.ParseValue<string>("newHandle"),
+        jsonDict.ParseNullableValue<bool>("resumable"),
+        jsonDict.ParseNullableValue<int>("lastConsumedClientMessageIndex")
+      );
+    }
+  }
+
+}

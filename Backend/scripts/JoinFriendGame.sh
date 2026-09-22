@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"data":{"gameId":"2cf290ad-1d64-45af-baa8-d1fedfa96370","join":true}}' https://us-central1-colorhunt-fdc67.cloudfunctions.net/joinFriendGame

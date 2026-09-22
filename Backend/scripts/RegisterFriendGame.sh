@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"data":{"playerId":"bHjF1KBVUEU7Tfk1IiNADivPyEb2","friendId":"sijaHHazdrh9P8Br6LQgHpsnMVg2"}}' https://us-central1-colorhunt-fdc67.cloudfunctions.net/registerFriendGame

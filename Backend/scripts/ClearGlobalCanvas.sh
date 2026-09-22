@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"data":{}}' https://us-central1-colorhunt-fdc67.cloudfunctions.net/clearGlobalCanvas | python3 -m json.tool

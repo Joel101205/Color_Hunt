@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"data":{"playerId":"MaxMustermann","gameId":"12345"}}' https://us-central1-colorhunt-fdc67.cloudfunctions.net/registerPlayerForGame | python3 -m json.tool

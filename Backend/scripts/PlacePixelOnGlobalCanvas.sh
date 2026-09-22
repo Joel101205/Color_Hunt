@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"data":{"playerId":"bHjF1KBVUEU7Tfk1IiNADivPyEb2","xCoord":"10","yCoord":"10","hexCode":"#0000FF"}}' https://us-central1-colorhunt-fdc67.cloudfunctions.net/placePixelOnGlobalCanvas | python3 -m json.tool
