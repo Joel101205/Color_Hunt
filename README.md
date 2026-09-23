@@ -17,6 +17,8 @@ Color Hunt is a 1v1 multiplayer game where players compete to find and photograp
 * The player with the most points wins the round.
 * The winner is rewarded with colored pixels that can be placed on a shared global canvas.
 
+https://github.com/user-attachments/assets/08f8c7e4-3ae9-4f01-9b53-517296cfeaf2
+
 ## Technologies
 
 * **Unity** — Game client, UI, and C# game logic
